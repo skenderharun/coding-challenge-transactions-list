@@ -11,7 +11,7 @@ export const GetAllTransactions = gql`
       data
       chainId
       hash
-      # There is no receipt in Transaction
+      # harun:comment - There is no receipt in Transaction
     }
   }
 `;

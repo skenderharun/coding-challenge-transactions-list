@@ -11,7 +11,7 @@ export const GetAllTransactions = gql`
       data
       chainId
       hash
-      receipt
+      # There is no receipt in Transaction
     }
   }
 `;

@@ -2,7 +2,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 const initialState: { wallet?: string } = {};
 
-// harun:comment - walletSlice implementation
+// harun:comment - walletSlice super simple implementation
 
 const walletSlice = createSlice({
   name: 'wallet',
@@ -18,4 +18,4 @@ export const { fetchWalletSuccess } = walletSlice.actions;
 
 export default walletSlice.reducer;
 
-// harun:comment - ducks pattern
+// harun:comment - ducks pattern FTW

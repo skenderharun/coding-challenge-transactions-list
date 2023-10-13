@@ -1,12 +1,35 @@
-import { takeEvery } from 'redux-saga/effects';
-import { JsonRpcProvider, Transaction, TransactionResponse, TransactionReceipt, BrowserProvider, Signer } from 'ethers';
+import { call, fork, put, takeEvery } from 'redux-saga/effects';
+import {
+  Transaction,
+  TransactionResponse,
+  TransactionReceipt,
+  BrowserProvider,
+  Signer,
+  AddressLike,
+} from 'ethers';
 
 import apolloClient from '../apollo/client';
 import { Actions } from '../types';
-import { SaveTransaction } from '../queries';
+import { GetAllTransactions, SaveTransaction } from '../queries';
+import {
+  fetchDataFailure,
+  fetchDataStart,
+  fetchDataSuccess,
+} from './reducers/transactionsSlice';
+import { navigate } from '../components/NaiveRouter';
+import client from '../apollo/client';
 
-function* sendTransaction() {
-  const provider = new JsonRpcProvider('http://localhost:8545');
+interface SendTransactionProps {
+  type: Actions.SendTransaction;
+  // harun:comment - callback is optional as we dont want to force user of saga to pass noop function
+  payload: { to: AddressLike; amount: bigint; callback?: () => void };
+}
+
+function* sendTransaction(action: SendTransactionProps) {
+  const { to, amount, callback } = action.payload;
+
+  // harun:comment - start fetching
+  yield put(fetchDataStart());
 
   // this could have been passed along in a more elegant fashion,
   // but for the purpouses of this scenario it's good enough
@@ -15,22 +38,16 @@ function* sendTransaction() {
 
   const signer: Signer = yield walletProvider.getSigner();
 
-  const accounts: Array<{ address: string }> = yield provider.listAccounts();
-
-  const randomAddress = () => {
-    const min = 1;
-    const max = 19;
-    const random = Math.round(Math.random() * (max - min) + min);
-    return accounts[random].address;
-  };
-
   const transaction = {
-    to: randomAddress(),
-    value: 1000000000000000000,
+    to,
+    value: amount.toString(),
   };
 
   try {
-    const txResponse: TransactionResponse = yield signer.sendTransaction(transaction);
+    const txResponse: TransactionResponse = yield signer.sendTransaction(
+      transaction
+    );
+
     const response: TransactionReceipt = yield txResponse.wait();
 
     const receipt: Transaction = yield response.getTransaction();
@@ -38,14 +55,14 @@ function* sendTransaction() {
     const variables = {
       transaction: {
         gasLimit: (receipt.gasLimit && receipt.gasLimit.toString()) || '0',
-        gasPrice: (receipt.gasPrice && receipt.gasPrice.toString())|| '0',
+        gasPrice: (receipt.gasPrice && receipt.gasPrice.toString()) || '0',
         to: receipt.to,
         from: receipt.from,
         value: (receipt.value && receipt.value.toString()) || '',
         data: receipt.data || null,
         chainId: (receipt.chainId && receipt.chainId.toString()) || '123456',
         hash: receipt.hash,
-      }
+      },
     };
 
     yield apolloClient.mutate({
@@ -53,10 +70,31 @@ function* sendTransaction() {
       variables,
     });
 
-  } catch (error) {
-    //
-  }
+    yield put(fetchDataSuccess());
 
+    yield call(refetchQueries); // harun:comment - refactored refetching queries into its own saga function
+
+    if (variables.transaction.hash)
+      yield call(handleNavigation, variables.transaction.hash);
+
+    if (callback) yield fork(callback); // harun:comment - using fork to non-blockingly call the callback
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      yield put(fetchDataFailure(error.message));
+    } else {
+      yield put(fetchDataFailure(String(error)));
+    }
+  }
+}
+
+function* refetchQueries() {
+  yield call([client, client.refetchQueries], {
+    include: [GetAllTransactions],
+  });
+}
+
+function* handleNavigation(hash: string) {
+  yield call(navigate, `transaction/${hash}`);
 }
 
 export function* rootSaga() {

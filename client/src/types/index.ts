@@ -9,6 +9,14 @@ export interface Transaction {
   hash: string;
 }
 
+// harun:comment - Extending the global Window object to include a new method 'close' under the property 'HSOverlay',
+// which accepts an HTMLInputElement as its parameter so Typescript doesnt yell at us
+declare global {
+  interface Window {
+    HSOverlay: { close: (e: HTMLInputElement) => void };
+  }
+}
+
 export interface TransactionsData {
   getAllTransactions: Transaction[];
 }
